@@ -19,12 +19,18 @@ let fileService: FileService;
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
-// Enable live reload for Electron
+// Enable live reload for Electron in development
 if (isDevelopment) {
-  require('electron-reload')(__dirname, {
-    electron: path.join(__dirname, '..', '..', 'node_modules', '.bin', 'electron'),
-    hardResetMethod: 'exit'
-  });
+  try {
+    // Only require electron-reload if it's installed
+    const electronReload = require('electron-reload');
+    electronReload(__dirname, {
+      electron: path.join(__dirname, '..', '..', 'node_modules', '.bin', 'electron'),
+      hardResetMethod: 'exit'
+    });
+  } catch (err) {
+    console.log('electron-reload not found, continuing without it');
+  }
 }
 
 function createWindow() {
@@ -38,11 +44,20 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      webSecurity: !isDevelopment, // Allow loading local files in dev
     },
     icon: path.join(__dirname, '../../resources/icons/icon.png'),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     frame: process.platform !== 'darwin',
     backgroundColor: '#1a1a1a',
+    show: false, // Don't show until ready
+  });
+
+  // Show window when ready
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow) {
+      mainWindow.show();
+    }
   });
 
   // Load the index.html
@@ -67,13 +82,19 @@ function createWindow() {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+
+  // Optimize performance
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.setZoomFactor(1);
+    mainWindow?.webContents.setVisualZoomLevelLimits(1, 1);
+  });
 }
 
 // Initialize services
 async function initializeServices() {
   try {
     // Initialize Ollama service
-    ollamaService = new OllamaService(store.get('ollamaUrl', 'http://localhost:11434'));
+    ollamaService = new OllamaService(store.get('ollamaUrl', 'http://localhost:11434') as string);
     
     // Initialize database service
     const dbPath = path.join(app.getPath('userData'), 'content-studio.db');
@@ -130,6 +151,22 @@ app.on('web-contents-created', (event, contents) => {
     shell.openExternal(navigationUrl);
   });
 });
+
+// Handle certificate errors
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  if (isDevelopment) {
+    // Ignore certificate errors in development
+    event.preventDefault();
+    callback(true);
+  } else {
+    // Use default behavior in production
+    callback(false);
+  }
+});
+
+// Performance optimizations
+app.commandLine.appendSwitch('disable-http-cache');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
 // Export for testing
 export { mainWindow, ollamaService, databaseService, fileService };

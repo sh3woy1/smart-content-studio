@@ -2,20 +2,28 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useStore } from './store/appStore';
 import { ThemeProvider } from './components/UI/ThemeProvider';
+import { ErrorBoundary } from './components/UI/ErrorBoundary';
 import { Layout } from './components/Layout';
-import { EditorPage } from './pages/EditorPage';
-import { ProjectsPage } from './pages/ProjectsPage';
-import { TemplatesPage } from './pages/TemplatesPage';
-import { AnalyticsPage } from './pages/AnalyticsPage';
-import { SettingsPage } from './pages/SettingsPage';
 import { LoadingScreen } from './components/UI/LoadingScreen';
 import { useOllamaConnection } from './hooks/useOllama';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { lazyLoad } from './utils/lazyLoad';
 import toast from 'react-hot-toast';
 
-function App() {
+// Lazy load pages for better performance
+const EditorPage = lazyLoad(() => import('./pages/EditorPage').then(m => ({ default: m.EditorPage })));
+const ProjectsPage = lazyLoad(() => import('./pages/ProjectsPage').then(m => ({ default: m.ProjectsPage })));
+const TemplatesPage = lazyLoad(() => import('./pages/TemplatesPage').then(m => ({ default: m.TemplatesPage })));
+const AnalyticsPage = lazyLoad(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
+const SettingsPage = lazyLoad(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+
+function AppContent() {
   const [isLoading, setIsLoading] = useState(true);
   const { initializeApp, setOllamaStatus } = useStore();
   const { checkConnection } = useOllamaConnection();
+  
+  // Initialize keyboard shortcuts
+  useKeyboardShortcuts();
 
   useEffect(() => {
     const initApp = async () => {
@@ -44,6 +52,25 @@ function App() {
     };
 
     initApp();
+
+    // Set up auto-save interval
+    const { autoSave, autoSaveInterval, saveDocument, currentDocument, unsavedChanges } = useStore.getState();
+    
+    let autoSaveTimer: NodeJS.Timeout;
+    if (autoSave) {
+      autoSaveTimer = setInterval(() => {
+        if (currentDocument && unsavedChanges) {
+          saveDocument();
+          toast.success('Auto-saved', { duration: 1000 });
+        }
+      }, autoSaveInterval);
+    }
+
+    return () => {
+      if (autoSaveTimer) {
+        clearInterval(autoSaveTimer);
+      }
+    };
   }, []);
 
   if (isLoading) {
@@ -51,18 +78,26 @@ function App() {
   }
 
   return (
-    <ThemeProvider>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<EditorPage />} />
-          <Route path="/editor/:documentId?" element={<EditorPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/templates" element={<TemplatesPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Routes>
-      </Layout>
-    </ThemeProvider>
+    <Layout>
+      <Routes>
+        <Route path="/" element={<EditorPage />} />
+        <Route path="/editor/:documentId?" element={<EditorPage />} />
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/templates" element={<TemplatesPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Routes>
+    </Layout>
+  );
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

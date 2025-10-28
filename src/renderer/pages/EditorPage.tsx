@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { useStore } from '../store/appStore';
 import { AIAssistantPanel } from '../components/AIAssistant/AIAssistantPanel';
 import { Button } from '../components/UI/Button';
 import { cn } from '../utils/cn';
+import { debounce } from '../utils/debounce';
 import { marked } from 'marked';
 
 export const EditorPage: React.FC = () => {
@@ -18,10 +19,51 @@ export const EditorPage: React.FC = () => {
     settings,
     selectDocument,
     documents,
+    updateWordCount,
   } = useStore();
 
   const [preview, setPreview] = useState('');
   const [showAIPanel, setShowAIPanel] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
+
+  // Memoize editor options for performance
+  const editorOptions = useMemo(() => ({
+    fontSize: settings.fontSize,
+    fontFamily: `'${settings.fontFamily}', monospace`,
+    lineHeight: settings.lineHeight * settings.fontSize,
+    wordWrap: settings.wordWrap ? 'on' as const : 'off' as const,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    padding: { top: 16, bottom: 16 },
+    automaticLayout: true,
+    suggest: {
+      showWords: true,
+      showSnippets: true,
+    },
+    quickSuggestions: {
+      other: true,
+      comments: false,
+      strings: false,
+    },
+  }), [settings]);
+
+  // Debounced content update for better performance
+  const debouncedSetContent = useCallback(
+    debounce((value: string) => {
+      setEditorContent(value);
+      updateWordCount();
+    }, 500),
+    []
+  );
+
+  // Debounced preview update
+  const debouncedUpdatePreview = useCallback(
+    debounce(async (content: string) => {
+      const html = await marked(content);
+      setPreview(html);
+    }, 300),
+    []
+  );
 
   useEffect(() => {
     if (documentId) {
@@ -30,19 +72,31 @@ export const EditorPage: React.FC = () => {
         selectDocument(doc);
       }
     }
-  }, [documentId, documents]);
+  }, [documentId, documents, selectDocument]);
 
   useEffect(() => {
-    // Update preview when content changes
-    const html = marked(editorContent);
-    setPreview(html);
-  }, [editorContent]);
+    debouncedUpdatePreview(editorContent);
+  }, [editorContent, debouncedUpdatePreview]);
 
-  const handleEditorChange = (value: string | undefined) => {
+  const handleEditorChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
-      setEditorContent(value);
+      debouncedSetContent(value);
     }
-  };
+  }, [debouncedSetContent]);
+
+  const handleEditorMount = useCallback((editor: any) => {
+    // Set up editor event listeners
+    editor.onDidChangeModelContent(() => {
+      const selection = editor.getSelection();
+      if (selection) {
+        const text = editor.getModel().getValueInRange(selection);
+        setSelectedText(text);
+      }
+    });
+
+    // Focus editor on mount
+    editor.focus();
+  }, []);
 
   const editorTheme = theme === 'dark' ? 'vs-dark' : 'light';
 
@@ -54,7 +108,11 @@ export const EditorPage: React.FC = () => {
           <p className="text-muted-foreground mb-6">
             Create a new document or select an existing one to start writing.
           </p>
-          <Button onClick={() => {/* Create new document */}}>
+          <Button 
+            onClick={() => {
+              useStore.getState().createDocument('Untitled', 'blog');
+            }}
+          >
             Create New Document
           </Button>
         </div>
@@ -78,20 +136,8 @@ export const EditorPage: React.FC = () => {
                 theme={editorTheme}
                 value={editorContent}
                 onChange={handleEditorChange}
-                options={{
-                  fontSize: settings.fontSize,
-                  fontFamily: `'${settings.fontFamily}', monospace`,
-                  lineHeight: settings.lineHeight * settings.fontSize,
-                  wordWrap: settings.wordWrap ? 'on' : 'off',
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  padding: { top: 16, bottom: 16 },
-                  automaticLayout: true,
-                  suggest: {
-                    showWords: true,
-                    showSnippets: true,
-                  },
-                }}
+                onMount={handleEditorMount}
+                options={editorOptions}
               />
             </div>
           </div>
@@ -115,14 +161,15 @@ export const EditorPage: React.FC = () => {
       {showAIPanel && (
         <AIAssistantPanel 
           onClose={() => setShowAIPanel(false)}
-          selectedText={window.getSelection()?.toString() || ''}
+          selectedText={selectedText}
         />
       )}
 
       {/* Floating AI Button */}
       <Button
-        className="fixed bottom-6 right-6 rounded-full h-14 w-14 shadow-lg"
+        className="fixed bottom-6 right-6 rounded-full h-14 w-14 shadow-lg z-10"
         onClick={() => setShowAIPanel(!showAIPanel)}
+        title="AI Assistant"
       >
         ✨
       </Button>
