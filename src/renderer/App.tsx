@@ -19,7 +19,7 @@ const SettingsPage = lazyLoad(() => import('./pages/SettingsPage').then(m => ({ 
 
 function AppContent() {
   const [isLoading, setIsLoading] = useState(true);
-  const { initializeApp, setOllamaStatus } = useStore();
+  const { initializeApp, setOllamaStatus, settings, saveDocument, currentDocument, unsavedChanges } = useStore();
   const { checkConnection } = useOllamaConnection();
   
   // Initialize keyboard shortcuts
@@ -52,26 +52,21 @@ function AppContent() {
     };
 
     initApp();
+  }, []);
 
-    // Set up auto-save interval
-    const { autoSave, autoSaveInterval, saveDocument, currentDocument, unsavedChanges } = useStore.getState();
-    
-    let autoSaveTimer: NodeJS.Timeout;
-    if (autoSave) {
-      autoSaveTimer = setInterval(() => {
+  // Set up auto-save interval
+  useEffect(() => {
+    if (settings.autoSave && settings.autoSaveInterval) {
+      const interval = setInterval(() => {
         if (currentDocument && unsavedChanges) {
           saveDocument();
           toast.success('Auto-saved', { duration: 1000 });
         }
-      }, autoSaveInterval);
-    }
+      }, settings.autoSaveInterval);
 
-    return () => {
-      if (autoSaveTimer) {
-        clearInterval(autoSaveTimer);
-      }
-    };
-  }, []);
+      return () => clearInterval(interval);
+    }
+  }, [settings.autoSave, settings.autoSaveInterval, currentDocument, unsavedChanges, saveDocument]);
 
   if (isLoading) {
     return <LoadingScreen />;

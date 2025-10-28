@@ -183,8 +183,13 @@ export class DatabaseService {
     const stmt = this.db.prepare(query);
     const rows = status ? stmt.all(status) : stmt.all();
     
-    return rows.map(row => ({
-      ...row,
+    return rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      status: row.status,
       tags: row.tags ? JSON.parse(row.tags) : [],
       settings: row.settings ? JSON.parse(row.settings) : {},
     })) as Project[];
@@ -224,9 +229,18 @@ export class DatabaseService {
     const stmt = this.db.prepare(query);
     const rows = projectId ? stmt.all(projectId) : stmt.all();
     
-    return rows.map(row => ({
-      ...row,
+    return rows.map((row: any) => ({
+      id: row.id,
+      project_id: row.project_id,
+      title: row.title,
+      content: row.content,
+      type: row.type,
+      status: row.status,
+      word_count: row.word_count,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
       metadata: row.metadata ? JSON.parse(row.metadata) : {},
+      version: row.version,
     })) as Document[];
   }
 
@@ -262,10 +276,17 @@ export class DatabaseService {
     const stmt = this.db.prepare(query);
     const rows = category ? stmt.all(category) : stmt.all();
     
-    return rows.map(row => ({
-      ...row,
+    return rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      category: row.category,
+      content: row.content,
       variables: row.variables ? JSON.parse(row.variables) : [],
       is_custom: Boolean(row.is_custom),
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      usage_count: row.usage_count,
     })) as Template[];
   }
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense, ComponentType } from 'react';
+import React, { lazy, Suspense, ComponentType } from 'react';
 import { LoadingScreen } from '../components/UI/LoadingScreen';
 
 export function lazyLoad<T extends ComponentType<any>>(
@@ -6,7 +6,7 @@ export function lazyLoad<T extends ComponentType<any>>(
 ) {
   const LazyComponent = lazy(factory);
 
-  return (props: any) => (
+  return (props: React.ComponentProps<T>) => (
     <Suspense fallback={<LoadingScreen />}>
       <LazyComponent {...props} />
     </Suspense>

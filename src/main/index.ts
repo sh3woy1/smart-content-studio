@@ -19,20 +19,6 @@ let fileService: FileService;
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
-// Enable live reload for Electron in development
-if (isDevelopment) {
-  try {
-    // Only require electron-reload if it's installed
-    const electronReload = require('electron-reload');
-    electronReload(__dirname, {
-      electron: path.join(__dirname, '..', '..', 'node_modules', '.bin', 'electron'),
-      hardResetMethod: 'exit'
-    });
-  } catch (err) {
-    console.log('electron-reload not found, continuing without it');
-  }
-}
-
 function createWindow() {
   // Create the browser window
   mainWindow = new BrowserWindow({
@@ -142,14 +128,6 @@ app.on('before-quit', async () => {
   if (databaseService) {
     await databaseService.close();
   }
-});
-
-// Security: Prevent new window creation
-app.on('web-contents-created', (event, contents) => {
-  contents.on('new-window', (event, navigationUrl) => {
-    event.preventDefault();
-    shell.openExternal(navigationUrl);
-  });
 });
 
 // Handle certificate errors
